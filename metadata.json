@@ -1,0 +1,5 @@
+{
+  "name": "Code Gamma ACCU",
+  "description": "A specialized roster management system for Institut Kanser Negara, featuring a matrix-style doctor schedule with shift tracking and audit logs.",
+  "requestFramePermissions": []
+}
