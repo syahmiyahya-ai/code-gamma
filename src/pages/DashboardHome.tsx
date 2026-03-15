@@ -11,7 +11,7 @@ import {
   ArrowRight
 } from 'lucide-react';
 import { motion } from 'motion/react';
-import { useAuth } from '../contexts/AuthContext';
+import { useAuth } from '../shared/auth/AuthContext';
 
 interface Shift {
   id: number;

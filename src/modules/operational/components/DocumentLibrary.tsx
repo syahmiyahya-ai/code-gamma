@@ -34,7 +34,7 @@ const getSupabase = () => {
   }
 };
 
-import { hasPermission, UserRole } from '../utils/permissions';
+import { hasPermission, UserRole } from '../../../shared/auth/permissions';
 
 interface Document {
   id: number;

@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { ArrowRightLeft, CalendarDays, Loader2, CheckCircle2 } from 'lucide-react';
-import { ShiftSwapModal } from './ShiftSwapModal';
+import { ShiftSwapModal } from '../../swaps/components/ShiftSwapModal';
 
 interface User {
   id: string;

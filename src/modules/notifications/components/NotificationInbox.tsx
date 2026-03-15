@@ -12,7 +12,7 @@ import {
   CheckCircle2
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { fetchWithRetry } from '../utils/api';
+import { fetchWithRetry } from '../../../shared/utils/api';
 
 interface Notification {
   id: string;

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { ArrowRightLeft, CheckCircle2, XCircle, Clock, User as UserIcon, Calendar as CalendarIcon, Shield, Loader2, AlertCircle } from 'lucide-react';
 
-import { hasPermission, UserRole } from '../utils/permissions';
+import { hasPermission, UserRole } from '../../../shared/auth/permissions';
 
 interface ShiftSwap {
   id: number;

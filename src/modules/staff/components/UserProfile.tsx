@@ -16,9 +16,9 @@ import {
   CalendarDays
 } from 'lucide-react';
 import { motion } from 'motion/react';
-import StaffTaskList from './StaffTaskList';
+import StaffTaskList from '../../tasks/components/StaffTaskList';
 
-import { UserRole } from '../utils/permissions';
+import { UserRole } from '../../../shared/auth/permissions';
 
 interface User {
   id: string;

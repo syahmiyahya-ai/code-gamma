@@ -2,8 +2,8 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'motion/react';
 import { Upload, User as UserIcon, CheckCircle2, Loader2, Camera, Sparkles, LogOut } from 'lucide-react';
-import { supabase } from '../lib/supabase';
-import { useAuth } from '../contexts/AuthContext';
+import { supabase } from '../shared/db/supabase';
+import { useAuth } from '../shared/auth/AuthContext';
 
 const PLACEHOLDER_AVATARS = [
   'https://api.dicebear.com/7.x/avataaars/svg?seed=Felix',

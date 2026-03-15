@@ -7,14 +7,14 @@ import {
   AlertCircle
 } from 'lucide-react';
 import { motion } from 'motion/react';
-import { generateDailySummary, ShiftRecord } from '../utils/rosterUtils';
-import { AdminRosterTable } from '../components/AdminRosterTable';
-import { AutomatedSummaryTable } from '../components/AutomatedSummaryTable';
-import { StaffDashboardView } from '../components/StaffDashboardView';
-import { useAuth } from '../contexts/AuthContext';
-import { canManageRoster, UserRole } from '../utils/permissions';
-import { MatrixRosterView } from '../components/MatrixRosterView';
-import { fetchWithRetry } from '../utils/api';
+import { generateDailySummary, ShiftRecord } from '../modules/roster/utils/rosterUtils';
+import { AdminRosterTable } from '../modules/roster/components/AdminRosterTable';
+import { AutomatedSummaryTable } from '../modules/roster/components/AutomatedSummaryTable';
+import { StaffDashboardView } from '../modules/roster/components/StaffDashboardView';
+import { useAuth } from '../shared/auth/AuthContext';
+import { canManageRoster, UserRole } from '../shared/auth/permissions';
+import { MatrixRosterView } from '../modules/roster/components/MatrixRosterView';
+import { fetchWithRetry } from '../shared/utils/api';
 
 interface User {
   id: string;

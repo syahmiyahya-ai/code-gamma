@@ -1,9 +1,9 @@
 import React, { useState, useMemo } from 'react';
 import { X, Check, AlertCircle, Download, ArrowRightLeft, CalendarDays, Loader2, CheckCircle2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { ShiftSwapModal } from './ShiftSwapModal';
+import { ShiftSwapModal } from '../../swaps/components/ShiftSwapModal';
 
-import { UserRole } from '../utils/permissions';
+import { UserRole } from '../../../shared/auth/permissions';
 
 interface User {
   id: string;

@@ -12,8 +12,8 @@ import {
   Lock,
   RefreshCw
 } from 'lucide-react';
-import { useAuth } from '../contexts/AuthContext';
-import { supabase } from '../lib/supabase';
+import { useAuth } from '../shared/auth/AuthContext';
+import { supabase } from '../shared/db/supabase';
 import { useNavigate } from 'react-router-dom';
 
 const ProfilePage: React.FC = () => {

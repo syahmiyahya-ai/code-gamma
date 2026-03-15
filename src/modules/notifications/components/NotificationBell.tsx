@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Bell } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import NotificationInbox from './NotificationInbox';
-import { fetchWithRetry } from '../utils/api';
+import { fetchWithRetry } from '../../../shared/utils/api';
 
 interface Notification {
   id: string;

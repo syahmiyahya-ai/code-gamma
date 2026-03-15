@@ -14,10 +14,10 @@ import {
   Settings
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { useAuth } from '../contexts/AuthContext';
-import { hasPermission } from '../utils/permissions';
-import { supabase } from '../lib/supabase';
-import NotificationBell from '../components/NotificationBell';
+import { useAuth } from '../shared/auth/AuthContext';
+import { hasPermission } from '../shared/auth/permissions';
+import { supabase } from '../shared/db/supabase';
+import NotificationBell from '../modules/notifications/components/NotificationBell';
 
 interface NavItemProps {
   to: string;

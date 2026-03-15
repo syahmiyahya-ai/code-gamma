@@ -11,7 +11,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
-import { hasPermission, UserRole } from '../utils/permissions';
+import { hasPermission, UserRole } from '../../../shared/auth/permissions';
 
 interface Announcement {
   id: number;

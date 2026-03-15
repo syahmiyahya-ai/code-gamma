@@ -2,9 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { Chrome, Shield, HeartPulse, Mail, Lock, User as UserIcon, ArrowRight, Loader2, Eye, EyeOff, CheckCircle2 } from 'lucide-react';
-import { supabase, isSupabaseConfigured } from '../lib/supabase';
-import { useAuth } from '../contexts/AuthContext';
-import { fetchWithRetry } from '../utils/api';
+import { supabase, isSupabaseConfigured } from '../shared/db/supabase';
+import { useAuth } from '../shared/auth/AuthContext';
+import { fetchWithRetry } from '../shared/utils/api';
 
 export const Login: React.FC = () => {
   const { user, loading: authLoading } = useAuth();

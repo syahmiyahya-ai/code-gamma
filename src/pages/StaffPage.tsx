@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { Search, Mail, Phone, User, Shield, BadgeCheck, Trash2, AlertTriangle } from 'lucide-react';
-import { supabase } from '../lib/supabase';
-import { useAuth } from '../contexts/AuthContext';
-import { isAdministrator } from '../utils/permissions';
+import { supabase } from '../shared/db/supabase';
+import { useAuth } from '../shared/auth/AuthContext';
+import { isAdministrator } from '../shared/auth/permissions';
 import { motion, AnimatePresence } from 'motion/react';
 
 interface StaffMember {

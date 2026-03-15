@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { Session, User } from '@supabase/supabase-js';
-import { supabase } from '../lib/supabase';
-import { UserRole } from '../utils/permissions';
+import { supabase } from '../db/supabase';
+import { UserRole } from './permissions';
 import { fetchWithRetry } from '../utils/api';
 
 interface Profile {
