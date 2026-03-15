@@ -118,7 +118,9 @@ export const Dashboard: React.FC = () => {
   const [assignments, setAssignments] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [viewDate, setViewDate] = useState(new Date());
+  const [viewMode, setViewMode] = useState<'weekly' | 'monthly'>('monthly');
   const [showLogs, setShowLogs] = useState(false);
+  const [swaps, setSwaps] = useState<any[]>([]);
   const [summaryDate, setSummaryDate] = useState(new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kuala_Lumpur' }).format(new Date()));
 
   const currentUser = profile;
@@ -127,27 +129,45 @@ export const Dashboard: React.FC = () => {
   useEffect(() => {
     const initializeApp = async () => {
       try {
-        const [usersRes, typesRes, logsRes] = await Promise.all([
+        const start = formatDate(viewMode === 'monthly' ? getStartDate(viewDate) : getWeekStartDate(viewDate));
+        const end = formatDate(viewMode === 'monthly' ? getEndDate(viewDate) : getWeekEndDate(viewDate));
+
+        const [usersRes, typesRes, shiftsRes] = await Promise.all([
           fetch('/api/users'),
           fetch('/api/shift-types'),
-          fetch('/api/audit-logs')
+          fetch(`/api/shifts?start=${start}&end=${end}`)
         ]);
         
-        const usersData = await usersRes.json();
-        const typesData = await typesRes.json();
-        const logsData = await logsRes.json();
+        const [usersData, typesData, shiftsData] = await Promise.all([
+          usersRes.json(),
+          typesRes.json(),
+          shiftsRes.json()
+        ]);
         
         setUsers(usersData);
         setShiftTypes(typesData);
-        setAuditLogs(logsData);
-        
-        if (profile?.id) {
-          const tasksRes = await fetch(`/api/my-tasks?user_id=${profile.id}`);
-          const tasksData = await tasksRes.json();
-          setAssignments(tasksData);
+        setShifts(shiftsData);
+
+        // Fetch audit logs only if user is admin/manager
+        if (hasPermission(profile?.role, 'view_admin_dashboard')) {
+          fetch('/api/audit-logs')
+            .then(res => res.json())
+            .then(data => setAuditLogs(data))
+            .catch(err => console.error("Failed to fetch audit logs", err));
         }
         
-        await fetchShifts();
+        if (profile?.id) {
+          const [tasksRes, swapsRes] = await Promise.all([
+            fetch(`/api/my-tasks?user_id=${profile.id}`),
+            fetch(`/api/shift-swaps?status=PENDING`)
+          ]);
+          const [tasksData, swapsData] = await Promise.all([
+            tasksRes.json(),
+            swapsRes.json()
+          ]);
+          setAssignments(tasksData);
+          setSwaps(swapsData);
+        }
       } catch (err) {
         console.error("Failed to initialize app", err);
       } finally {
@@ -163,8 +183,8 @@ export const Dashboard: React.FC = () => {
   };
 
   const fetchShifts = async () => {
-    const start = formatDate(getStartDate(viewDate));
-    const end = formatDate(getEndDate(viewDate));
+    const start = formatDate(viewMode === 'monthly' ? getStartDate(viewDate) : getWeekStartDate(viewDate));
+    const end = formatDate(viewMode === 'monthly' ? getEndDate(viewDate) : getWeekEndDate(viewDate));
     const res = await fetch(`/api/shifts?start=${start}&end=${end}`);
     const data = await res.json();
     setShifts(data);
@@ -172,7 +192,7 @@ export const Dashboard: React.FC = () => {
 
   useEffect(() => {
     fetchShifts();
-  }, [viewDate]);
+  }, [viewDate, viewMode]);
 
   // --- Helpers ---
   function getStartDate(date: Date) {
@@ -188,6 +208,19 @@ export const Dashboard: React.FC = () => {
     return d;
   }
 
+  function getWeekStartDate(date: Date) {
+    const d = new Date(date);
+    const day = d.getDay();
+    const diff = d.getDate() - day + (day === 0 ? -6 : 1); // Adjust to Monday
+    return new Date(d.setDate(diff));
+  }
+
+  function getWeekEndDate(date: Date) {
+    const d = getWeekStartDate(date);
+    d.setDate(d.getDate() + 6);
+    return d;
+  }
+
   function formatDate(date: Date) {
     const year = date.getFullYear();
     const month = String(date.getMonth() + 1).padStart(2, '0');
@@ -196,8 +229,8 @@ export const Dashboard: React.FC = () => {
   }
 
   const dates = useMemo(() => {
-    const start = getStartDate(viewDate);
-    const end = getEndDate(viewDate);
+    const start = viewMode === 'monthly' ? getStartDate(viewDate) : getWeekStartDate(viewDate);
+    const end = viewMode === 'monthly' ? getEndDate(viewDate) : getWeekEndDate(viewDate);
     const arr = [];
     let curr = new Date(start);
     while (curr <= end) {
@@ -205,7 +238,7 @@ export const Dashboard: React.FC = () => {
       curr.setDate(curr.getDate() + 1);
     }
     return arr;
-  }, [viewDate]);
+  }, [viewDate, viewMode]);
 
   const dailySummary: Record<string, string[]> = useMemo(() => {
     const enriched: ShiftRecord[] = shifts.map(s => ({
@@ -383,6 +416,10 @@ export const Dashboard: React.FC = () => {
             </div>
 
             <div className="flex items-center gap-4 lg:gap-6">
+              <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 bg-slate-50 rounded-full border border-slate-100">
+                <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
+                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">API Connected</span>
+              </div>
               <div className="flex items-center gap-3">
                 <NotificationBell currentUserId={currentUser?.id || ''} />
                 <button 
@@ -653,16 +690,36 @@ export const Dashboard: React.FC = () => {
 
           {activeTab === 'roster' && (
             <div className="space-y-6">
-              <div className="flex items-center justify-between bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
-                <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2">
-                  <CalendarIcon size={20} className="text-emerald-500" />
-                  Roster Period
-                </h2>
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-4 bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
+                <div className="flex items-center gap-4">
+                  <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+                    <CalendarIcon size={20} className="text-emerald-500" />
+                    Roster Period
+                  </h2>
+                  <div className="flex p-1 bg-slate-100 rounded-xl">
+                    <button
+                      onClick={() => setViewMode('weekly')}
+                      className={`px-4 py-1.5 text-xs font-bold rounded-lg transition-all ${viewMode === 'weekly' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                    >
+                      Weekly
+                    </button>
+                    <button
+                      onClick={() => setViewMode('monthly')}
+                      className={`px-4 py-1.5 text-xs font-bold rounded-lg transition-all ${viewMode === 'monthly' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                    >
+                      Monthly
+                    </button>
+                  </div>
+                </div>
                 <div className="flex items-center gap-2 bg-slate-100 p-1 rounded-lg">
                   <button 
                     onClick={() => {
                       const next = new Date(viewDate);
-                      next.setMonth(next.getMonth() - 1);
+                      if (viewMode === 'monthly') {
+                        next.setMonth(next.getMonth() - 1);
+                      } else {
+                        next.setDate(next.getDate() - 7);
+                      }
                       setViewDate(next);
                     }}
                     className="p-2 hover:bg-white hover:shadow-sm rounded-md transition-all text-slate-600"
@@ -670,12 +727,19 @@ export const Dashboard: React.FC = () => {
                     <ChevronLeft size={18} />
                   </button>
                   <span className="px-4 font-semibold text-slate-700 min-w-[140px] text-center text-sm lg:text-base">
-                    {viewDate.toLocaleString('default', { month: 'long', year: 'numeric' })}
+                    {viewMode === 'monthly' 
+                      ? viewDate.toLocaleString('default', { month: 'long', year: 'numeric' })
+                      : `Week of ${getWeekStartDate(viewDate).toLocaleDateString('default', { day: 'numeric', month: 'short' })}`
+                    }
                   </span>
                   <button 
                     onClick={() => {
                       const next = new Date(viewDate);
-                      next.setMonth(next.getMonth() + 1);
+                      if (viewMode === 'monthly') {
+                        next.setMonth(next.getMonth() + 1);
+                      } else {
+                        next.setDate(next.getDate() + 7);
+                      }
                       setViewDate(next);
                     }}
                     className="p-2 hover:bg-white hover:shadow-sm rounded-md transition-all text-slate-600"
@@ -750,6 +814,7 @@ export const Dashboard: React.FC = () => {
                   isAdmin={true}
                   currentUserId={currentUser?.id}
                   onRefresh={fetchShifts}
+                  pendingSwaps={swaps}
                   onUpdateShift={async (userId, date, shiftCode, isCodeBlue) => {
                     if (!currentUser) return;
                     try {
@@ -781,6 +846,7 @@ export const Dashboard: React.FC = () => {
                   shiftTypes={shiftTypes}
                   currentUserId={currentUser?.id || ''}
                   onRefresh={fetchShifts}
+                  pendingSwaps={swaps}
                 />
               )}
 

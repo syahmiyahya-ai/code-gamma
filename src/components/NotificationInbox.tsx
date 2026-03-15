@@ -12,6 +12,7 @@ import {
   CheckCircle2
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import { fetchWithRetry } from '../utils/api';
 
 interface Notification {
   id: string;
@@ -38,7 +39,9 @@ const NotificationInbox: React.FC<Props> = ({ isOpen, onClose, currentUserId, on
   const fetchNotifications = async () => {
     try {
       setLoading(true);
-      const res = await fetch(`/api/notifications?user_id=${currentUserId}`);
+      const res = await fetchWithRetry(`/api/notifications?user_id=${currentUserId}`, {
+        retries: 3
+      });
       if (!res.ok) {
         throw new Error(`Server returned ${res.status}`);
       }
@@ -60,10 +63,11 @@ const NotificationInbox: React.FC<Props> = ({ isOpen, onClose, currentUserId, on
 
   const markAllAsRead = async () => {
     try {
-      await fetch('/api/notifications/read-all', {
+      await fetchWithRetry('/api/notifications/read-all', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ user_id: currentUserId })
+        body: JSON.stringify({ user_id: currentUserId }),
+        retries: 2
       });
       fetchNotifications();
       onRefresh();
@@ -74,7 +78,10 @@ const NotificationInbox: React.FC<Props> = ({ isOpen, onClose, currentUserId, on
 
   const markAsRead = async (id: string) => {
     try {
-      await fetch(`/api/notifications/${id}/read`, { method: 'POST' });
+      await fetchWithRetry(`/api/notifications/${id}/read`, { 
+        method: 'POST',
+        retries: 2
+      });
       fetchNotifications();
       onRefresh();
     } catch (err) {
@@ -84,10 +91,11 @@ const NotificationInbox: React.FC<Props> = ({ isOpen, onClose, currentUserId, on
 
   const handleAction = async (id: string, action: 'ACCEPT' | 'DECLINE') => {
     try {
-      await fetch('/api/notifications/action', {
+      await fetchWithRetry('/api/notifications/action', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ notification_id: id, action })
+        body: JSON.stringify({ notification_id: id, action }),
+        retries: 2
       });
       fetchNotifications();
       onRefresh();

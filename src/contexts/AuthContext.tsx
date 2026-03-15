@@ -2,6 +2,7 @@ import React, { createContext, useContext, useEffect, useState } from 'react';
 import { Session, User } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
 import { UserRole } from '../utils/permissions';
+import { fetchWithRetry } from '../utils/api';
 
 interface Profile {
   id: string;
@@ -30,60 +31,58 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [profile, setProfile] = useState<any | null>(null);
 
   const fetchProfile = async (userId: string) => {
-    if (!userId) {
-      console.warn('fetchProfile called without userId');
-      return;
-    }
+    if (!userId) return;
 
     try {
+      const url = `/api/users/${encodeURIComponent(userId)}`;
       console.log(`[AUTH] Fetching profile for user: ${userId}`);
-      const res = await fetch(`/api/users/${userId}`, {
+      
+      const res = await fetchWithRetry(url, {
         headers: {
           'Accept': 'application/json',
           'Cache-Control': 'no-cache'
-        }
+        },
+        retries: 5
       });
       
       if (res.ok) {
         const data = await res.json();
-        console.log('[AUTH] Profile fetched successfully:', data);
         setProfile(data);
       } else {
-        const errorText = await res.text().catch(() => 'No error body');
-        console.warn(`[AUTH] Profile fetch failed with status: ${res.status}. Body: ${errorText}`);
-        // If 404, it might be a new user who hasn't completed setup
-        if (res.status === 404) {
-          console.log('[AUTH] User profile not found in database (404)');
-        }
         setProfile(null);
       }
-    } catch (err) {
-      console.error('[AUTH] Error fetching profile (Failed to fetch):', err);
-      if (err instanceof Error) {
-        console.error('[AUTH] Error message:', err.message);
-        console.error('[AUTH] Error stack:', err.stack);
-      }
-      // Check if it's a network error
-      if (err instanceof TypeError && err.message === 'Failed to fetch') {
-        console.error('[AUTH] This is a network error. Check if the server is running and accessible.');
-      }
+    } catch (err: any) {
+      console.error('[AUTH] Profile fetch failed:', err.message || err);
       setProfile(null);
     }
   };
 
   useEffect(() => {
     // Health check to verify API connectivity
-    fetch('/api/health')
-      .then(res => res.json())
-      .then(data => console.log('API Health Check:', data))
-      .catch(err => console.error('API Health Check Failed:', err));
+    const checkHealth = async () => {
+      try {
+        const res = await fetchWithRetry(`/api/health?t=${Date.now()}`, {
+          headers: { 'Accept': 'application/json' },
+          cache: 'no-cache',
+          retries: 10,
+          retryDelay: 3000
+        });
+        const data = await res.json();
+        console.log('[AUTH] API Health Check Success:', data);
+      } catch (err: any) {
+        console.error('[AUTH] API Health Check Failed:', err.message || err);
+      }
+    };
+
+    checkHealth();
 
     // Check active sessions and sets the user
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
-      setUser(session?.user ?? null);
-      if (session?.user) {
-        fetchProfile(session.user.id);
+      const currentUser = session?.user ?? null;
+      setUser(currentUser);
+      if (currentUser) {
+        syncUserToBackend(currentUser);
       }
       setLoading(false);
     });
@@ -91,9 +90,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // Listen for changes on auth state (logged in, signed out, etc.)
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
-      setUser(session?.user ?? null);
-      if (session?.user) {
-        fetchProfile(session.user.id);
+      const currentUser = session?.user ?? null;
+      setUser(currentUser);
+      if (currentUser) {
+        syncUserToBackend(currentUser);
       } else {
         setProfile(null);
       }
@@ -103,8 +103,57 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return () => subscription.unsubscribe();
   }, []);
 
+  const syncUserToBackend = async (user: User) => {
+    if (!user) return;
+
+    try {
+      // First try to fetch the profile
+      const url = `/api/users/${encodeURIComponent(user.id)}`;
+      console.log(`[AUTH] Syncing user to backend: ${user.id}`);
+      
+      const res = await fetchWithRetry(url, {
+        headers: { 'Accept': 'application/json' },
+        retries: 5
+      });
+
+      if (res.status === 404) {
+        // User doesn't exist in backend, create them
+        console.log('[AUTH] User not found in backend, creating profile...');
+        const createRes = await fetchWithRetry(`/api/users`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-user-id': user.id
+          },
+          body: JSON.stringify({
+            id: user.id,
+            name: user.user_metadata?.full_name || user.email?.split('@')[0] || 'New User',
+            email: user.email,
+            role: 'Staff', // Default role
+            avatar_url: user.user_metadata?.avatar_url
+          }),
+          retries: 5
+        });
+
+        if (createRes.ok) {
+          console.log('[AUTH] Backend profile created successfully');
+          fetchProfile(user.id);
+        } else {
+          const errorData = await createRes.json().catch(() => ({ error: 'Unknown error' }));
+          console.error('[AUTH] Failed to create backend profile:', createRes.status, errorData);
+        }
+      } else if (res.ok) {
+        // User exists, just fetch the profile
+        fetchProfile(user.id);
+      }
+    } catch (err) {
+      console.error('[AUTH] Error syncing user to backend:', err);
+    }
+  };
+
   const refreshProfile = async () => {
     if (user) {
+      console.log('[AUTH] Refreshing profile for user:', user.id);
       await fetchProfile(user.id);
     }
   };

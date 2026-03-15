@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Bell } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import NotificationInbox from './NotificationInbox';
+import { fetchWithRetry } from '../utils/api';
 
 interface Notification {
   id: string;
@@ -18,7 +19,9 @@ const NotificationBell: React.FC<Props> = ({ currentUserId }) => {
 
   const fetchUnreadCount = async () => {
     try {
-      const res = await fetch(`/api/notifications?user_id=${currentUserId}`);
+      const res = await fetchWithRetry(`/api/notifications?user_id=${currentUserId}`, {
+        retries: 3
+      });
       if (!res.ok) {
         throw new Error(`Server returned ${res.status}`);
       }

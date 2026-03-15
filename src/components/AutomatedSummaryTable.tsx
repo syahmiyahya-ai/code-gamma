@@ -90,93 +90,60 @@ export const AutomatedSummaryTable: React.FC<AutomatedSummaryTableProps> = ({
       </div>
 
       <div className="overflow-auto max-h-[60vh]">
-        <table className="w-full border-separate border-spacing-0">
+        <table className="w-full border-separate border-spacing-0 border-t border-l border-slate-300">
           <thead>
-            <tr className="bg-slate-50">
-              {/* Sticky Top-Left Corner */}
-              <th className="sticky top-0 left-0 z-30 bg-slate-50 p-4 text-left border-b border-r border-slate-200 min-w-[150px] shadow-[2px_2px_0_rgba(0,0,0,0.05)]">
-                <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Shift / Date</div>
-              </th>
-              {/* Sticky Top Row (Dates) */}
-              {dates.map(date => {
-                const dateStr = formatDate(date);
-                const isSelected = selectedDate === dateStr;
-                return (
-                  <th 
-                    key={date.toISOString()} 
-                    onClick={() => onDateClick?.(dateStr)}
-                    className={`sticky top-0 z-20 p-4 text-center border-b border-r border-slate-200 min-w-[120px] cursor-pointer transition-colors ${isSelected ? 'bg-emerald-50' : 'bg-slate-50 hover:bg-slate-100'}`}
-                  >
-                    <div className="text-[10px] font-bold text-slate-400 uppercase mb-1">
-                      {date.toLocaleDateString('default', { weekday: 'short' })}
-                    </div>
-                    <div className={`text-sm font-bold ${[0, 6].includes(date.getDay()) ? 'text-rose-500' : 'text-slate-700'}`}>
-                      {date.getDate()}
-                    </div>
-                    {isSelected && (
-                      <div className="absolute bottom-0 left-0 right-0 h-1 bg-emerald-500"></div>
-                    )}
-                  </th>
-                );
-              })}
+            {/* Row 1: TARIKH */}
+            <tr className="bg-slate-100">
+              <th className="sticky top-0 left-0 z-40 bg-slate-200 p-1 text-center border-b border-r border-slate-300 min-w-[120px] text-[10px] font-bold uppercase tracking-wider">TARIKH</th>
+              {dates.map(date => (
+                <th key={`s1-${date.toISOString()}`} className="sticky top-0 z-20 bg-slate-100 p-1 text-center border-b border-r border-slate-300 min-w-[100px] text-[10px] font-bold">
+                  {date.getDate()}-{date.toLocaleDateString('default', { month: 'short' })}
+                </th>
+              ))}
+            </tr>
+            {/* Row 2: HARI */}
+            <tr className="bg-slate-100">
+              <th className="sticky top-[25px] left-0 z-40 bg-slate-200 p-1 text-center border-b border-r border-slate-300 text-[10px] font-bold uppercase tracking-wider">HARI</th>
+              {dates.map(date => (
+                <th key={`s2-${date.toISOString()}`} className="sticky top-[25px] z-20 bg-slate-100 p-1 text-center border-b border-r border-slate-300 text-[10px] font-bold">
+                  {date.toLocaleDateString('default', { weekday: 'short' })}
+                </th>
+              ))}
             </tr>
           </thead>
           <tbody>
             {filteredShiftTypes.map(type => (
               <tr key={type.code} className="hover:bg-slate-50/50 transition-colors">
-                {/* Sticky First Column (Shift Codes) */}
-                <td className="sticky left-0 z-10 bg-white p-4 border-b border-r border-slate-200 font-medium text-slate-700 shadow-[2px_0_0_rgba(0,0,0,0.05)]">
-                  <div className="flex items-center gap-3">
-                    <div 
-                      className="w-10 h-10 rounded-xl flex items-center justify-center text-xs font-black shadow-sm border border-slate-100"
-                      style={{ backgroundColor: type.background_color, color: type.text_color }}
-                    >
-                      {type.code}
-                    </div>
-                    <div>
-                      <p className="text-xs font-bold text-slate-800">{type.code} Shift</p>
-                      <p className="text-[10px] text-slate-400 font-medium uppercase">Assignments</p>
-                    </div>
+                <td className="sticky left-0 z-10 p-2 border-b border-r border-slate-300 font-bold text-[10px] uppercase text-slate-700 shadow-[2px_0_5px_rgba(0,0,0,0.05)]" style={{ backgroundColor: type.background_color, color: type.text_color }}>
+                  <div className="flex flex-col items-center gap-1">
+                    <span>{type.code}</span>
+                    <div className="w-4 h-0.5 bg-current opacity-30 rounded-full"></div>
                   </div>
                 </td>
-                {/* Data Cells (Doctor Lists) */}
                 {dates.map(date => {
                   const dateStr = formatDate(date);
                   const doctors = allSummaries[dateStr]?.[type.code] || [];
+                  const isToday = dateStr === new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kuala_Lumpur' }).format(new Date());
 
                   return (
                     <td 
                       key={dateStr} 
-                      className="p-3 border-b border-r border-slate-100 align-top min-w-[120px]"
+                      className={`p-1.5 border-b border-r border-slate-300 align-top min-w-[100px] transition-colors ${isToday ? 'bg-blue-50/50' : 'bg-white'}`}
                     >
-                      <div className="flex flex-col gap-1.5">
+                      <div className="flex flex-col gap-1">
                         {doctors.length > 0 ? (
-                          doctors.map((name, idx) => {
-                            // Find if this specific doctor on this date/shift is code blue
-                            const isCodeBlue = shifts.find(s => 
-                              s.date === dateStr && 
-                              s.shift_code === type.code && 
-                              users.find(u => u.name === name)?.id === s.user_id &&
-                              s.is_code_blue === 1
-                            );
-
-                            return (
-                              <div 
-                                key={idx} 
-                                className={`p-2 rounded-lg border text-[10px] font-bold transition-all flex flex-col gap-1 ${isCodeBlue ? 'bg-rose-50 border-rose-100 text-rose-700 shadow-sm' : 'bg-white border-slate-100 text-slate-600 shadow-sm'}`}
-                              >
-                                <span className="truncate">{name}</span>
-                                {isCodeBlue && (
-                                  <span className="inline-flex items-center gap-1 text-[8px] font-black uppercase tracking-tighter text-rose-500">
-                                    <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse"></span>
-                                    Code Blue
-                                  </span>
-                                )}
-                              </div>
-                            );
-                          })
+                          doctors.map((name, idx) => (
+                            <div 
+                              key={idx} 
+                              className="text-[9px] font-bold text-slate-600 leading-tight py-1 px-2 bg-slate-50 rounded-md border border-slate-100 hover:border-slate-300 transition-colors"
+                            >
+                              {name}
+                            </div>
+                          ))
                         ) : (
-                          <span className="text-[10px] text-slate-300 italic text-center py-2">—</span>
+                          <div className="flex items-center justify-center py-2 opacity-10">
+                            <div className="w-4 h-0.5 bg-slate-400 rounded-full"></div>
+                          </div>
                         )}
                       </div>
                     </td>

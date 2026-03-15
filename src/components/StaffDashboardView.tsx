@@ -30,6 +30,7 @@ interface StaffDashboardViewProps {
   shiftTypes: ShiftType[];
   currentUserId: string;
   onRefresh?: () => void;
+  pendingSwaps?: any[];
 }
 
 export const StaffDashboardView: React.FC<StaffDashboardViewProps> = ({
@@ -38,7 +39,8 @@ export const StaffDashboardView: React.FC<StaffDashboardViewProps> = ({
   shifts,
   shiftTypes,
   currentUserId,
-  onRefresh
+  onRefresh,
+  pendingSwaps = []
 }) => {
   const [selectedShift, setSelectedShift] = useState<Shift | null>(null);
   const [isSwapModalOpen, setIsSwapModalOpen] = useState(false);
@@ -99,7 +101,7 @@ export const StaffDashboardView: React.FC<StaffDashboardViewProps> = ({
           <thead>
             <tr className="bg-slate-50">
               {/* Sticky Top-Left Corner */}
-              <th className="sticky top-0 left-0 z-30 bg-slate-50 p-4 text-left border-b border-r border-slate-200 min-w-[180px] shadow-[2px_2px_0_rgba(0,0,0,0.05)]">
+              <th className="sticky top-0 left-0 z-30 bg-slate-50 p-4 text-left border-b border-r border-slate-200 lg:min-w-[180px] min-w-[100px] shadow-[2px_2px_0_rgba(0,0,0,0.05)]">
                 <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Doctor / Date</div>
               </th>
               {/* Sticky Top Row (Dates) with Today Highlight */}
@@ -134,17 +136,17 @@ export const StaffDashboardView: React.FC<StaffDashboardViewProps> = ({
                   className={`transition-colors ${isCurrentUser ? 'bg-yellow-50/80 hover:bg-yellow-100/80' : 'hover:bg-slate-50/50'}`}
                 >
                   {/* Sticky First Column (Doctors) with Self Highlight */}
-                  <td className={`sticky left-0 z-10 p-4 border-b border-r border-slate-200 font-medium shadow-[2px_0_0_rgba(0,0,0,0.05)] transition-colors ${isCurrentUser ? 'bg-yellow-50 text-yellow-900' : 'bg-white text-slate-700'}`}>
-                    <div className="flex items-center gap-3">
-                      <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold ${isCurrentUser ? 'bg-yellow-200 text-yellow-700' : 'bg-slate-100 text-slate-500'}`}>
+                  <td className={`sticky left-0 z-10 p-2 lg:p-4 border-b border-r border-slate-200 font-medium shadow-[2px_0_0_rgba(0,0,0,0.05)] transition-colors ${isCurrentUser ? 'bg-yellow-50 text-yellow-900' : 'bg-white text-slate-700'}`}>
+                    <div className="flex items-center gap-2 lg:gap-3">
+                      <div className={`w-6 h-6 lg:w-8 lg:h-8 rounded-lg flex items-center justify-center text-[10px] lg:text-xs font-bold ${isCurrentUser ? 'bg-yellow-200 text-yellow-700' : 'bg-slate-100 text-slate-500'}`}>
                         {user.name.split(' ').map(n => n[0]).join('')}
                       </div>
-                      <div>
-                        <p className="text-sm font-bold truncate max-w-[100px]">{user.name}</p>
+                      <div className="min-w-0">
+                        <p className="text-[10px] lg:text-sm font-bold truncate max-w-[60px] lg:max-w-[120px]">{user.name}</p>
                         {isCurrentUser && (
                           <div className="flex items-center gap-1">
                             <span className="w-1 h-1 rounded-full bg-yellow-500 animate-pulse"></span>
-                            <p className="text-[8px] font-black text-yellow-600 uppercase tracking-tighter">My Schedule</p>
+                            <p className="text-[7px] lg:text-[8px] font-black text-yellow-600 uppercase tracking-tighter">Me</p>
                           </div>
                         )}
                       </div>
@@ -157,6 +159,11 @@ export const StaffDashboardView: React.FC<StaffDashboardViewProps> = ({
                     const type = shiftTypes.find(t => t.code === shift?.shift_code);
                     const isToday = dateStr === todayStr;
 
+                    const hasPendingSwap = pendingSwaps.some(s => 
+                      (s.requester_id === user.id && s.requester_shift_date === dateStr) ||
+                      (s.target_user_id === user.id && s.target_shift_date === dateStr)
+                    );
+
                     const canSwap = isCurrentUser && shift && !['HK1', 'HK2', 'HK3', 'HK4', 'HKA', 'HKO', 'CR', 'EL'].includes(shift.shift_code);
                     const canSync = isCurrentUser && shift && currentUser?.google_access_token;
 
@@ -166,11 +173,17 @@ export const StaffDashboardView: React.FC<StaffDashboardViewProps> = ({
                         className={`p-2 border-b border-r border-slate-100 text-center transition-all relative group ${isToday ? 'bg-blue-50/30' : ''}`}
                       >
                         <div 
-                          className={`h-10 w-full rounded-lg flex items-center justify-center text-xs font-bold transition-transform ${!shift ? 'border-2 border-dashed border-slate-100' : ''}`}
+                          className={`h-10 w-full rounded-lg flex items-center justify-center text-xs font-bold transition-transform ${!shift ? 'border-2 border-dashed border-slate-100' : ''} ${hasPendingSwap ? 'ring-2 ring-amber-400 ring-offset-1' : ''}`}
                           style={type ? { backgroundColor: type.background_color, color: type.text_color } : {}}
                         >
                           {shift?.shift_code || ''}
                           
+                          {hasPendingSwap && (
+                            <div className="absolute top-1 left-1 text-amber-500 animate-pulse" title="Pending Swap Request">
+                              <ArrowRightLeft size={10} strokeWidth={3} />
+                            </div>
+                          )}
+
                           {(canSwap || canSync) && (
                             <div className="absolute inset-0 bg-black/60 text-white opacity-0 group-hover:opacity-100 transition-opacity rounded-lg flex flex-col items-center justify-center gap-1 z-20">
                               {canSwap && (

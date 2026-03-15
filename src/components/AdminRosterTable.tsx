@@ -35,6 +35,7 @@ interface AdminRosterTableProps {
   isAdmin: boolean;
   currentUserId?: string;
   onRefresh?: () => void;
+  pendingSwaps?: any[];
 }
 
 export const AdminRosterTable: React.FC<AdminRosterTableProps> = ({
@@ -45,7 +46,8 @@ export const AdminRosterTable: React.FC<AdminRosterTableProps> = ({
   onUpdateShift,
   isAdmin,
   currentUserId,
-  onRefresh
+  onRefresh,
+  pendingSwaps = []
 }) => {
   const [selectedCell, setSelectedCell] = useState<{ userId: string; date: string } | null>(null);
   const [isUpdating, setIsUpdating] = useState(false);
@@ -83,6 +85,14 @@ export const AdminRosterTable: React.FC<AdminRosterTableProps> = ({
   const [selectedCells, setSelectedCells] = useState<{ userId: string; date: string }[]>([]);
   const [showBulkModal, setShowBulkModal] = useState(false);
 
+  // Paint Mode State (Quick Assign)
+  const [paintMode, setPaintMode] = useState(false);
+  const [activePaintShift, setActivePaintShift] = useState<string | null>(null);
+  const [activePaintIsCodeBlue, setActivePaintIsCodeBlue] = useState(false);
+
+  // Search State
+  const [searchQuery, setSearchQuery] = useState('');
+
   // Drag Selection State
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState<{ userIdx: number; dateIdx: number } | null>(null);
@@ -101,6 +111,14 @@ export const AdminRosterTable: React.FC<AdminRosterTableProps> = ({
 
   const getShift = (userId: string, dateStr: string) => {
     return shifts.find(s => s.user_id === userId && s.date === dateStr);
+  };
+
+  const getCounts = (userId: string) => {
+    const userShifts = shifts.filter(s => s.user_id === userId);
+    return {
+      pm: userShifts.filter(s => s.shift_code === 'PM').length,
+      ns: userShifts.filter(s => s.shift_code === 'NS').length
+    };
   };
 
   const handleMouseDown = (userIdx: number, dateIdx: number) => {
@@ -173,8 +191,23 @@ export const AdminRosterTable: React.FC<AdminRosterTableProps> = ({
     setDragEnd(null);
   };
 
-  const handleCellClick = (userId: string, dateStr: string) => {
+  const filteredUsers = useMemo(() => {
+    return users.filter(u => u.name.toLowerCase().includes(searchQuery.toLowerCase()));
+  }, [users, searchQuery]);
+
+  const handleCellClick = async (userId: string, dateStr: string) => {
     if (!isAdmin) return;
+
+    // Paint Mode Logic
+    if (paintMode && activePaintShift !== undefined) {
+      setIsUpdating(true);
+      try {
+        await onUpdateShift(userId, dateStr, activePaintShift, activePaintIsCodeBlue);
+      } finally {
+        setIsUpdating(false);
+      }
+      return;
+    }
 
     // If we just finished a drag that wasn't a single cell, don't open the modal
     if (bulkEditMode) return;
@@ -255,50 +288,117 @@ export const AdminRosterTable: React.FC<AdminRosterTableProps> = ({
 
   return (
     <div className="relative bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-      {/* Header with Bulk Toggle */}
+      {/* Header with Bulk Toggle and Search */}
       {isAdmin && (
-        <div className="p-4 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => {
-                setBulkEditMode(!bulkEditMode);
-                setSelectedCells([]);
-              }}
-              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${bulkEditMode ? 'bg-slate-900 text-white shadow-lg' : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'}`}
-            >
-              <div className={`w-2 h-2 rounded-full ${bulkEditMode ? 'bg-emerald-400 animate-pulse' : 'bg-slate-300'}`}></div>
-              {bulkEditMode ? 'Exit Bulk Edit' : 'Bulk Edit Mode'}
-            </button>
-            {bulkEditMode && selectedCells.length > 0 && (
-              <motion.button
-                initial={{ opacity: 0, x: -10 }}
-                animate={{ opacity: 1, x: 0 }}
-                onClick={() => setShowBulkModal(true)}
-                className="px-4 py-2 bg-emerald-600 text-white rounded-xl text-xs font-bold shadow-lg shadow-emerald-200 hover:bg-emerald-700 transition-all flex items-center gap-2"
-              >
-                Assign to {selectedCells.length} Cells
-              </motion.button>
-            )}
-            {!bulkEditMode && (
+        <div className="p-4 bg-slate-50 border-b border-slate-200 space-y-4">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="flex flex-wrap items-center gap-2">
               <button
-                onClick={handleExportCSV}
-                className="px-4 py-2 bg-white text-slate-600 border border-slate-200 rounded-xl text-xs font-bold hover:bg-slate-50 transition-all flex items-center gap-2"
+                onClick={() => {
+                  setBulkEditMode(!bulkEditMode);
+                  setSelectedCells([]);
+                  setPaintMode(false);
+                }}
+                className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${bulkEditMode ? 'bg-slate-900 text-white shadow-lg' : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'}`}
               >
-                <Download size={14} />
-                Export CSV
+                <div className={`w-2 h-2 rounded-full ${bulkEditMode ? 'bg-emerald-400 animate-pulse' : 'bg-slate-300'}`}></div>
+                {bulkEditMode ? 'Exit Bulk Edit' : 'Bulk Edit Mode'}
               </button>
-            )}
+
+              <button
+                onClick={() => {
+                  setPaintMode(!paintMode);
+                  setBulkEditMode(false);
+                  setSelectedCells([]);
+                }}
+                className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${paintMode ? 'bg-indigo-600 text-white shadow-lg' : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'}`}
+              >
+                <div className={`w-2 h-2 rounded-full ${paintMode ? 'bg-indigo-300 animate-pulse' : 'bg-slate-300'}`}></div>
+                {paintMode ? 'Exit Paint Mode' : 'Paint Mode (Quick Assign)'}
+              </button>
+
+              {bulkEditMode && selectedCells.length > 0 && (
+                <motion.button
+                  initial={{ opacity: 0, x: -10 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  onClick={() => setShowBulkModal(true)}
+                  className="px-4 py-2 bg-emerald-600 text-white rounded-xl text-xs font-bold shadow-lg shadow-emerald-200 hover:bg-emerald-700 transition-all flex items-center gap-2"
+                >
+                  Assign to {selectedCells.length} Cells
+                </motion.button>
+              )}
+              {!bulkEditMode && !paintMode && (
+                <button
+                  onClick={handleExportCSV}
+                  className="px-4 py-2 bg-white text-slate-600 border border-slate-200 rounded-xl text-xs font-bold hover:bg-slate-50 transition-all flex items-center gap-2"
+                >
+                  <Download size={14} />
+                  Export CSV
+                </button>
+              )}
+            </div>
+
+            <div className="relative flex-1 max-w-xs">
+              <input
+                type="text"
+                placeholder="Search Doctor..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-9 pr-4 py-2 bg-white border border-slate-200 rounded-xl text-xs font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all"
+              />
+              <CalendarDays size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+            </div>
           </div>
-          {bulkEditMode && (
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-              Click cells to select/deselect
-            </p>
-          )}
+
+          {/* Paint Mode Palette */}
+          <AnimatePresence>
+            {paintMode && (
+              <motion.div
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: 'auto', opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                className="overflow-hidden"
+              >
+                <div className="p-3 bg-indigo-50 rounded-xl border border-indigo-100 flex flex-wrap items-center gap-4">
+                  <div className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">Select Paint Tool:</div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    {shiftTypes.map(type => (
+                      <button
+                        key={type.code}
+                        onClick={() => setActivePaintShift(type.code)}
+                        className={`px-3 py-1.5 rounded-lg text-[10px] font-black transition-all border-2 ${activePaintShift === type.code ? 'border-indigo-600 scale-110 shadow-md' : 'border-transparent opacity-70 hover:opacity-100'}`}
+                        style={{ backgroundColor: type.background_color, color: type.text_color }}
+                      >
+                        {type.code}
+                      </button>
+                    ))}
+                    <button
+                      onClick={() => setActivePaintShift(null)}
+                      className={`px-3 py-1.5 rounded-lg text-[10px] font-black transition-all border-2 ${activePaintShift === null ? 'border-indigo-600 bg-white' : 'border-dashed border-indigo-200 text-indigo-400'}`}
+                    >
+                      CLEAR
+                    </button>
+                  </div>
+                  <div className="h-6 w-px bg-indigo-200 mx-2" />
+                  <button
+                    onClick={() => setActivePaintIsCodeBlue(!activePaintIsCodeBlue)}
+                    className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-[10px] font-black transition-all ${activePaintIsCodeBlue ? 'bg-rose-500 text-white shadow-md' : 'bg-white text-slate-400 border border-slate-200'}`}
+                  >
+                    <AlertCircle size={12} />
+                    CODE BLUE
+                  </button>
+                  <div className="ml-auto text-[10px] font-bold text-indigo-500 italic">
+                    * Click cells to apply "{activePaintShift || 'CLEAR'}" {activePaintIsCodeBlue ? '+ CB' : ''}
+                  </div>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
       )}
 
       <div 
-        className="overflow-auto max-h-[70vh]"
+        className="overflow-auto max-h-[70vh] relative"
         onMouseLeave={() => {
           if (isDragging) {
             setIsDragging(false);
@@ -307,169 +407,99 @@ export const AdminRosterTable: React.FC<AdminRosterTableProps> = ({
           }
         }}
       >
-        <table role="grid" className="w-full border-separate border-spacing-0">
+        {isUpdating && (
+          <div className="absolute inset-0 z-[60] bg-white/10 backdrop-blur-[1px] flex items-center justify-center pointer-events-none">
+            <div className="bg-white/80 backdrop-blur-md p-3 rounded-2xl shadow-xl border border-white/20 flex items-center gap-3">
+              <Loader2 className="w-5 h-5 text-indigo-600 animate-spin" />
+              <span className="text-xs font-bold text-slate-600">Updating...</span>
+            </div>
+          </div>
+        )}
+        <table role="grid" className="w-full border-separate border-spacing-0 border-t border-l border-slate-300">
           <thead>
-            <tr className="bg-slate-50">
-              {/* Sticky Top-Left Corner */}
-              <th 
-                role="columnheader"
-                className="sticky top-0 left-0 z-30 bg-slate-50 p-4 text-left border-b border-r border-slate-200 min-w-[200px] shadow-[2px_2px_0_rgba(0,0,0,0.05)]"
-              >
-                <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Doctor / Date</div>
-              </th>
-              {/* Sticky Top Row (Dates) */}
+            {/* Row 1: TARIKH */}
+            <tr className="bg-slate-100">
+              <th className="sticky top-0 left-0 z-40 bg-slate-200 p-1 text-center border-b border-r border-slate-300 lg:min-w-[120px] min-w-[80px] text-[10px] font-bold uppercase">TARIKH</th>
               {dates.map(date => (
-                <th 
-                  key={date.toISOString()} 
-                  role="columnheader"
-                  className="sticky top-0 z-20 bg-slate-50 p-4 text-center border-b border-r border-slate-200 min-w-[70px]"
-                >
-                  <div className="text-[10px] font-bold text-slate-400 uppercase mb-1">
-                    {date.toLocaleDateString('default', { weekday: 'short' })}
-                  </div>
-                  <div className={`text-sm font-bold ${[0, 6].includes(date.getDay()) ? 'text-rose-500' : 'text-slate-700'}`}>
-                    {date.getDate()}
-                  </div>
+                <th key={`h1-${date.toISOString()}`} className="sticky top-0 z-20 bg-slate-100 p-1 text-center border-b border-r border-slate-300 min-w-[60px] text-[10px] font-bold">
+                  {date.getDate()}-{date.toLocaleDateString('default', { month: 'short' })}
+                </th>
+              ))}
+            </tr>
+            {/* Row 2: HARI */}
+            <tr className="bg-slate-100">
+              <th className="sticky top-[25px] left-0 z-40 bg-slate-200 p-1 text-center border-b border-r border-slate-300 text-[10px] font-bold uppercase">HARI</th>
+              {dates.map(date => (
+                <th key={`h2-${date.toISOString()}`} className="sticky top-[25px] z-20 bg-slate-100 p-1 text-center border-b border-r border-slate-300 text-[10px] font-bold">
+                  {date.toLocaleDateString('default', { weekday: 'short' })}
                 </th>
               ))}
             </tr>
           </thead>
           <tbody>
-            {users.map((user, userIdx) => (
-              <tr key={user.id} className="hover:bg-slate-50/50 transition-colors">
-                {/* Sticky First Column (Doctors) */}
-                <td 
-                  role="rowheader"
-                  className="sticky left-0 z-10 bg-white p-4 border-b border-r border-slate-200 font-medium text-slate-700 shadow-[2px_0_0_rgba(0,0,0,0.05)]"
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center text-slate-500 text-xs font-bold">
-                      {user.name.split(' ').map(n => n[0]).join('')}
-                    </div>
-                    <div>
-                      <p className="text-sm font-bold truncate max-w-[120px]">{user.name}</p>
-                      <p className="text-[10px] text-slate-400 font-medium uppercase">{user.role}</p>
-                    </div>
-                  </div>
-                </td>
-                {/* Data Cells */}
-                {dates.map((date, dateIdx) => {
-                  const dateStr = formatDate(date);
-                  const shift = getShift(user.id, dateStr);
-                  const type = shiftTypes.find(t => t.code === shift?.shift_code);
-                  const isSelected = selectedCell?.userId === user.id && selectedCell?.date === dateStr;
-                  const isBulkSelected = selectedCells.some(c => c.userId === user.id && c.date === dateStr);
-                  
-                  // Check if cell is within current drag rectangle
-                  let isInDragRange = false;
-                  if (isDragging && dragStart && dragEnd) {
-                    const minU = Math.min(dragStart.userIdx, dragEnd.userIdx);
-                    const maxU = Math.max(dragStart.userIdx, dragEnd.userIdx);
-                    const minD = Math.min(dragStart.dateIdx, dragEnd.dateIdx);
-                    const maxD = Math.max(dragStart.dateIdx, dragEnd.dateIdx);
-                    isInDragRange = userIdx >= minU && userIdx <= maxU && dateIdx >= minD && dateIdx <= maxD;
-                  }
+            {filteredUsers.map((user, userIdx) => {
+              return (
+                <tr key={user.id} className="hover:bg-slate-50/50 transition-colors">
+                  <td className="sticky left-0 z-10 bg-white p-1 border-b border-r border-slate-300 text-[10px] font-bold uppercase text-slate-700 truncate lg:max-w-[120px] max-w-[80px]">
+                    {user.name}
+                  </td>
+                  {dates.map((date, dateIdx) => {
+                    const dateStr = formatDate(date);
+                    const shift = getShift(user.id, dateStr);
+                    const type = shiftTypes.find(t => t.code === shift?.shift_code);
+                    const isSelected = selectedCell?.userId === user.id && selectedCell?.date === dateStr;
+                    const isBulkSelected = selectedCells.some(c => c.userId === user.id && c.date === dateStr);
+                    
+                    const hasPendingSwap = pendingSwaps.some(s => 
+                      (s.requester_id === user.id && s.requester_shift_date === dateStr) ||
+                      (s.target_user_id === user.id && s.target_shift_date === dateStr)
+                    );
 
-                  return (
-                    <td 
-                      key={dateStr} 
-                      role="gridcell"
-                      aria-label={`${user.name}, ${new Date(dateStr).toLocaleDateString('default', { day: 'numeric', month: 'short', year: 'numeric' })}${shift ? `, Shift: ${shift.shift_code}${shift.is_code_blue ? ' (Code Blue)' : ''}` : ', No shift'}`}
-                      className={`p-2 border-b border-r border-slate-100 text-center transition-all relative group select-none ${isSelected ? 'bg-emerald-50/50' : ''} ${isAdmin ? 'cursor-pointer' : ''}`}
-                      onClick={() => handleCellClick(user.id, dateStr)}
-                      onMouseDown={() => handleMouseDown(userIdx, dateIdx)}
-                      onMouseEnter={() => handleMouseEnter(userIdx, dateIdx)}
-                      onMouseUp={() => handleMouseUp(userIdx, dateIdx)}
-                    >
-                      {/* Selection Overlay for Bulk Mode or Dragging */}
-                      {(bulkEditMode || isDragging) && (
-                        <div className={`absolute inset-0 z-10 transition-all ${isBulkSelected || isInDragRange ? 'bg-emerald-500/20 border-2 border-emerald-500' : 'hover:bg-slate-200/30'}`}>
-                          {isBulkSelected && (
-                            <div className="absolute top-1 left-1 bg-emerald-500 text-white rounded-full p-0.5 shadow-sm">
-                              <Check size={8} strokeWidth={4} />
+                    let isInDragRange = false;
+                    if (isDragging && dragStart && dragEnd) {
+                      const minU = Math.min(dragStart.userIdx, dragEnd.userIdx);
+                      const maxU = Math.max(dragStart.userIdx, dragEnd.userIdx);
+                      const minD = Math.min(dragStart.dateIdx, dragEnd.dateIdx);
+                      const maxD = Math.max(dragStart.dateIdx, dragEnd.dateIdx);
+                      isInDragRange = userIdx >= minU && userIdx <= maxU && dateIdx >= minD && dateIdx <= maxD;
+                    }
+
+                    return (
+                      <td 
+                        key={dateStr} 
+                        className={`p-0 border-b border-r border-slate-300 text-center transition-all relative group select-none h-8 ${isSelected ? 'ring-2 ring-emerald-500 z-20' : ''} ${isAdmin ? 'cursor-pointer' : ''}`}
+                        onClick={() => handleCellClick(user.id, dateStr)}
+                        onMouseDown={() => handleMouseDown(userIdx, dateIdx)}
+                        onMouseEnter={() => handleMouseEnter(userIdx, dateIdx)}
+                        onMouseUp={() => handleMouseUp(userIdx, dateIdx)}
+                      >
+                        <div 
+                          className={`w-full h-full flex items-center justify-center text-[10px] font-bold transition-all ${hasPendingSwap ? 'ring-1 ring-inset ring-amber-400' : ''}`}
+                          style={type ? { 
+                            backgroundColor: type.background_color, 
+                            color: type.text_color,
+                            boxShadow: isSelected ? 'inset 0 0 0 2px rgba(16, 185, 129, 0.5)' : 'none'
+                          } : {}}
+                        >
+                          {shift?.shift_code || ''}
+                          {shift?.is_code_blue === 1 && (
+                            <div className="absolute top-0 right-0 w-0 h-0 border-t-[8px] border-l-[8px] border-l-transparent border-t-rose-600 z-10" title="Code Blue Duty" />
+                          )}
+                          {hasPendingSwap && (
+                            <div className="absolute bottom-0.5 right-0.5 text-amber-500 animate-pulse" title="Pending Swap Request">
+                              <ArrowRightLeft size={8} strokeWidth={3} />
                             </div>
                           )}
                         </div>
-                      )}
-
-                      {/* Tooltip */}
-                      {shift && (
-                        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 bg-slate-900 text-white text-[10px] p-3 rounded-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50 pointer-events-none shadow-2xl">
-                          <p className="font-black border-b border-white/10 pb-1.5 mb-1.5 text-emerald-400 uppercase tracking-wider">{user.name}</p>
-                          <div className="space-y-1.5">
-                            <div className="flex justify-between items-center">
-                              <span className="text-slate-400">Date</span>
-                              <span className="font-bold">{new Date(dateStr).toLocaleDateString('default', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
-                            </div>
-                            <div className="flex justify-between items-center">
-                              <span className="text-slate-400">Shift</span>
-                              <span className="px-1.5 py-0.5 rounded bg-white/10 font-bold">{shift.shift_code}</span>
-                            </div>
-                            <div className="flex justify-between items-center">
-                              <span className="text-slate-400">Code Blue</span>
-                              <span className={`font-bold ${shift.is_code_blue === 1 ? 'text-rose-400' : 'text-slate-300'}`}>
-                                {shift.is_code_blue === 1 ? 'ACTIVE' : 'NO'}
-                              </span>
-                            </div>
-                          </div>
-                          {/* Arrow */}
-                          <div className="absolute top-full left-1/2 -translate-x-1/2 border-8 border-transparent border-t-slate-900"></div>
-                        </div>
-                      )}
-
-                      <div 
-                        className={`h-10 w-full rounded-lg flex items-center justify-center text-xs font-bold transition-transform active:scale-95 ${!shift ? 'border-2 border-dashed border-slate-100' : ''}`}
-                        style={type ? { backgroundColor: type.background_color, color: type.text_color } : {}}
-                      >
-                        {shift?.shift_code || ''}
-
-                        {user.id === currentUserId && shift && !['HK1', 'HK2', 'HK3', 'HK4', 'HKA', 'HKO', 'CR', 'EL'].includes(shift.shift_code) && !bulkEditMode && (
-                          <div className="absolute inset-0 bg-black/60 text-white opacity-0 group-hover:opacity-100 transition-opacity rounded-lg flex flex-col items-center justify-center gap-1 z-20">
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setSwapRequesterShift(shift);
-                                setIsSwapModalOpen(true);
-                              }}
-                              className="flex items-center gap-1 hover:text-emerald-400 transition-colors"
-                              title="Request Swap"
-                            >
-                              <ArrowRightLeft size={12} />
-                              <span className="text-[8px] font-black uppercase tracking-tighter">Swap</span>
-                            </button>
-                            {currentUser?.google_access_token && (
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleSyncCalendar(shift);
-                                }}
-                                disabled={syncingId === shift.id}
-                                className="flex items-center gap-1 hover:text-blue-400 transition-colors"
-                                title="Sync to Google Calendar"
-                              >
-                                {syncingId === shift.id ? (
-                                  <Loader2 size={12} className="animate-spin" />
-                                ) : syncedIds.includes(shift.id!) ? (
-                                  <CheckCircle2 size={12} className="text-emerald-400" />
-                                ) : (
-                                  <CalendarDays size={12} />
-                                )}
-                                <span className="text-[8px] font-black uppercase tracking-tighter">
-                                  {syncedIds.includes(shift.id!) ? 'Synced' : 'Sync'}
-                                </span>
-                              </button>
-                            )}
-                          </div>
+                        {(bulkEditMode || isDragging) && (isBulkSelected || isInDragRange) && (
+                          <div className="absolute inset-0 bg-emerald-500/20 border border-emerald-500 z-10 pointer-events-none" />
                         )}
-                      </div>
-                      {shift?.is_code_blue === 1 && (
-                        <div className="absolute top-1 right-1 w-2 h-2 bg-rose-500 rounded-full animate-pulse shadow-sm"></div>
-                      )}
-                    </td>
-                  );
-                })}
-              </tr>
-            ))}
+                      </td>
+                    );
+                  })}
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>

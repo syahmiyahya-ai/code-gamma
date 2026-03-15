@@ -2,8 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { Chrome, Shield, HeartPulse, Mail, Lock, User as UserIcon, ArrowRight, Loader2, Eye, EyeOff, CheckCircle2 } from 'lucide-react';
-import { supabase } from '../lib/supabase';
+import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
+import { fetchWithRetry } from '../utils/api';
 
 export const Login: React.FC = () => {
   const { user, loading: authLoading } = useAuth();
@@ -16,8 +17,26 @@ export const Login: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [success, setSuccess] = useState<string | null>(null);
+  const [apiStatus, setApiStatus] = useState<'checking' | 'ok' | 'error'>('checking');
   const navigate = useNavigate();
   const location = useLocation();
+
+  useEffect(() => {
+    const checkApi = async () => {
+      try {
+        const res = await fetchWithRetry(`/api/health?t=${Date.now()}`, {
+          retries: 5,
+          retryDelay: 2000
+        });
+        if (res.ok) setApiStatus('ok');
+        else setApiStatus('error');
+      } catch (err) {
+        console.error('[LOGIN] API health check failed:', err);
+        setApiStatus('error');
+      }
+    };
+    checkApi();
+  }, []);
 
   const from = location.state?.from?.pathname || '/dashboard';
 
@@ -46,7 +65,7 @@ export const Login: React.FC = () => {
 
   useEffect(() => {
     if (!authLoading && user) {
-      navigate('/dashboard', { replace: true });
+      navigate('/', { replace: true });
     }
   }, [user, authLoading, navigate]);
 
@@ -213,11 +232,22 @@ export const Login: React.FC = () => {
               <h2 className="text-4xl font-bold text-slate-900 tracking-tight mb-3">
                 {isSignUp ? 'Join the Network' : 'Welcome Back'}
               </h2>
-              <p className="text-slate-500 font-medium">
+              <p className="text-slate-500 font-medium mb-6">
                 {isSignUp 
                   ? 'Start managing your ward shifts with precision.' 
                   : 'Enter your credentials to access your dashboard.'}
               </p>
+
+              <div className="flex flex-wrap gap-2 mb-8">
+                <div className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${isSupabaseConfigured ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : 'bg-amber-50 text-amber-600 border border-amber-100'}`}>
+                  <div className={`w-1.5 h-1.5 rounded-full ${isSupabaseConfigured ? 'bg-emerald-500' : 'bg-amber-500 animate-pulse'}`} />
+                  Supabase: {isSupabaseConfigured ? 'Linked' : 'Not Configured'}
+                </div>
+                <div className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${apiStatus === 'ok' ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : apiStatus === 'error' ? 'bg-rose-50 text-rose-600 border border-rose-100' : 'bg-slate-50 text-slate-600 border border-slate-100'}`}>
+                  <div className={`w-1.5 h-1.5 rounded-full ${apiStatus === 'ok' ? 'bg-emerald-500' : apiStatus === 'error' ? 'bg-rose-500' : 'bg-slate-400 animate-pulse'}`} />
+                  API Server: {apiStatus === 'ok' ? 'Online' : apiStatus === 'error' ? 'Offline' : 'Checking...'}
+                </div>
+              </div>
             </div>
 
             <form onSubmit={handleEmailAuth} className="space-y-5">

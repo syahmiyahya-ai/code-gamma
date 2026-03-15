@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'motion/react';
-import { Upload, User as UserIcon, CheckCircle2, Loader2, Camera, Sparkles } from 'lucide-react';
+import { Upload, User as UserIcon, CheckCircle2, Loader2, Camera, Sparkles, LogOut } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -16,7 +16,11 @@ export const SetupProfile: React.FC = () => {
   const { user, refreshProfile } = useAuth();
   const navigate = useNavigate();
   const [selectedAvatar, setSelectedAvatar] = useState<string | null>(null);
-  const [role, setRole] = useState<string>('Doctor');
+  const [role, setRole] = useState<string>(
+    user?.email === 'syahmiyahya@gmail.com' || user?.email === 'syahmi@ikn.gov.my' 
+      ? 'Administrator' 
+      : 'Doctor'
+  );
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -69,18 +73,27 @@ export const SetupProfile: React.FC = () => {
         // Update existing user
         const updateRes = await fetch(`/api/users/${user.id}`, {
           method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 
+            'Content-Type': 'application/json',
+            'x-user-id': user.id
+          },
           body: JSON.stringify({ 
             avatar_url: selectedAvatar,
             role: role 
           })
         });
-        if (!updateRes.ok) throw new Error('Failed to update profile');
+        if (!updateRes.ok) {
+          const errorData = await updateRes.json().catch(() => ({}));
+          throw new Error(errorData.error || 'Failed to update profile');
+        }
       } else {
         // Create new user record
         const createRes = await fetch('/api/users', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 
+            'Content-Type': 'application/json',
+            'x-user-id': user.id
+          },
           body: JSON.stringify({
             id: user.id,
             name: user.user_metadata?.full_name || user.email?.split('@')[0] || 'New User',
@@ -89,7 +102,10 @@ export const SetupProfile: React.FC = () => {
             avatar_url: selectedAvatar
           })
         });
-        if (!createRes.ok) throw new Error('Failed to create profile');
+        if (!createRes.ok) {
+          const errorData = await createRes.json().catch(() => ({}));
+          throw new Error(errorData.error || 'Failed to create profile');
+        }
       }
 
       await refreshProfile();
@@ -210,6 +226,14 @@ export const SetupProfile: React.FC = () => {
                 <CheckCircle2 className="w-5 h-5" />
               </>
             )}
+          </button>
+
+          <button
+            onClick={() => supabase.auth.signOut()}
+            className="w-full bg-white hover:bg-slate-50 text-slate-500 font-bold py-4 rounded-2xl transition-all border border-slate-200 flex items-center justify-center gap-2 active:scale-[0.98]"
+          >
+            <LogOut className="w-5 h-5" />
+            <span>Sign Out</span>
           </button>
         </div>
       </motion.div>
